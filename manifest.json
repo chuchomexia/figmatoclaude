@@ -1,0 +1,18 @@
+{
+  "name": "Figma to Claude",
+  "id": "figma-to-claude",
+  "api": "1.0.0",
+  "main": "code.js",
+  "ui": "ui.html",
+  "menu": [
+    {
+      "name": "Export to Claude",
+      "command": "export-command"
+    },
+    {
+      "name": "Settings",
+      "command": "settings-command"
+    }
+  ],
+  "permissions": ["currentuser", "activeusers"]
+}

@@ -148,6 +148,52 @@ figma.ui.onmessage = async (msg) => {
   }
 };
 
+// Utility functions for DevMode (stubs that can be implemented when API is available)
+// These are placeholder implementations for the missing functions
+async function extractCssFromNode(node: SceneNode): Promise<string> {
+  // Placeholder implementation - would use Figma's DevMode API when available
+  return `/* CSS for ${node.name} */\n.${node.name.toLowerCase().replace(/\s+/g, '-')} {\n  /* CSS properties would go here */\n}`;
+}
+
+async function extractReactFromNode(node: SceneNode): Promise<string> {
+  // Placeholder implementation - would use Figma's DevMode API when available
+  return `// React component for ${node.name}\nimport React from 'react';\n\nexport function ${node.name.replace(/\s+/g, '')}() {\n  return (\n    <div className="${node.name.toLowerCase().replace(/\s+/g, '-')}">\n      {/* Component content would go here */}\n    </div>\n  );\n}`;
+}
+
+async function extractTailwindFromNode(node: SceneNode): Promise<string> {
+  // Placeholder implementation - would use Figma's DevMode API when available
+  return `<!-- Tailwind HTML for ${node.name} -->\n<div class="w-full h-full flex items-center justify-center">\n  <!-- Content would go here -->\n</div>`;
+}
+
+// Define an interface for the component structure
+interface ComponentStructure {
+  name: string;
+  type: string;
+  id: string;
+  children?: ComponentStructure[];
+}
+
+function extractComponentStructure(node: SceneNode): ComponentStructure {
+  // Placeholder implementation - would traverse component/instance structure
+  const structure: ComponentStructure = {
+    name: node.name,
+    type: node.type,
+    id: node.id
+  };
+  
+  // Add children if applicable
+  if ('children' in node) {
+    const childNode = node as FrameNode | GroupNode | InstanceNode | ComponentNode;
+    structure.children = childNode.children.map(child => ({
+      name: child.name,
+      type: child.type,
+      id: child.id
+    }));
+  }
+  
+  return structure;
+}
+
 // Función para extraer frames seleccionados
 async function extractSelectedFrames() {
   const selection = figma.currentPage.selection;
@@ -178,6 +224,7 @@ async function extractSelectedFrames() {
         const base64Image = figma.base64Encode(bytes);
         
         // Extraer información del frame
+        // Fix: Use getPluginData or a default empty string instead of description property
         const frameData: Screen = {
           id: node.id,
           name: node.name,
@@ -185,14 +232,13 @@ async function extractSelectedFrames() {
           width: node.width,
           height: node.height,
           image: base64Image,
-          description: node.description || ''
+          description: node.getPluginData('description') || ''
         };
         
         // Si DevMode está disponible, intenta extraer información de código
         if (extractedData.devModeData?.available) {
           try {
             // Intenta extraer código CSS (mediante DevMode API hipotética)
-            // Estas funciones tendrían que ser adaptadas a la API real de DevMode
             frameData.cssCode = await extractCssFromNode(node);
             frameData.reactCode = await extractReactFromNode(node);
             frameData.tailwindCode = await extractTailwindFromNode(node);
@@ -229,7 +275,10 @@ async function extractDesignStyles() {
   for (const style of colorStyles) {
     const paint = style.paints[0];
     if (paint && paint.type === 'SOLID') {
-      const { r, g, b, a } = paint.color;
+      // Fixed: Separate color and opacity correctly
+      const { r, g, b } = paint.color;
+      const a = paint.opacity !== undefined ? paint.opacity : 1;
+      
       const rgbColor = {
         r: Math.round(r * 255),
         g: Math.round(g * 255),
@@ -252,8 +301,21 @@ async function extractDesignStyles() {
   // Extraer estilos de texto
   const textStyles = figma.getLocalTextStyles();
   for (const style of textStyles) {
-    const lineHeight = style.lineHeight?.value ?? null;
-    const letterSpacing = style.letterSpacing?.value ?? null;
+    // Fix: Handle different LineHeight types
+    let lineHeightValue: number | null = null;
+    if (style.lineHeight && style.lineHeight.unit !== 'AUTO') {
+      if (style.lineHeight.unit === 'PIXELS') {
+        lineHeightValue = style.lineHeight.value;
+      } else if (style.lineHeight.unit === 'PERCENT') {
+        lineHeightValue = style.lineHeight.value * style.fontSize / 100;
+      }
+    }
+    
+    // Fix: Handle different LetterSpacing types
+    let letterSpacingValue: number | null = null;
+    if (style.letterSpacing && style.letterSpacing.unit !== 'PERCENT') {
+      letterSpacingValue = style.letterSpacing.value;
+    }
 
     extractedData.styles.typography.push({
       name: style.name,
@@ -261,8 +323,8 @@ async function extractDesignStyles() {
       fontFamily: style.fontName.family,
       fontStyle: style.fontName.style,
       fontSize: style.fontSize,
-      lineHeight,
-      letterSpacing,
+      lineHeight: lineHeightValue,
+      letterSpacing: letterSpacingValue,
       description: style.description || ''
     });
   }
@@ -302,14 +364,13 @@ function extractSpacingFromSelection(): number[] {
       
       // También analizamos padding dentro del contenedor
       if (node.type === 'FRAME') {
-        if ('paddingLeft' in node && node.paddingLeft !== undefined) 
-          spacing.add(Math.round(node.paddingLeft));
-        if ('paddingRight' in node && node.paddingRight !== undefined) 
-          spacing.add(Math.round(node.paddingRight));
-        if ('paddingTop' in node && node.paddingTop !== undefined) 
-          spacing.add(Math.round(node.paddingTop));
-        if ('paddingBottom' in node && node.paddingBottom !== undefined) 
-          spacing.add(Math.round(node.paddingBottom));
+        const frameNode = node as FrameNode;
+        if (frameNode.layoutMode !== 'NONE') {
+          if (frameNode.paddingLeft !== undefined) spacing.add(Math.round(frameNode.paddingLeft));
+          if (frameNode.paddingRight !== undefined) spacing.add(Math.round(frameNode.paddingRight));
+          if (frameNode.paddingTop !== undefined) spacing.add(Math.round(frameNode.paddingTop));
+          if (frameNode.paddingBottom !== undefined) spacing.add(Math.round(frameNode.paddingBottom));
+        }
       }
     }
   }

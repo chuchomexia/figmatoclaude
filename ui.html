@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Figma to Claude</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      padding: 20px;
+      color: #333;
+    }
+    .container {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+    h1 {
+      font-size: 16px;
+      margin: 0 0 16px 0;
+    }
+    .section {
+      margin-bottom: 20px;
+      padding: 12px;
+      border-radius: 8px;
+      background-color: #f5f5f5;
+    }
+    .section h2 {
+      font-size: 14px;
+      margin: 0 0 12px 0;
+    }
+    button {
+      background-color: #18A0FB;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-weight: 500;
+      margin: 4px 0;
+    }
+    button.secondary {
+      background-color: #F5F5F5;
+      color: #333;
+      border: 1px solid #E0E0E0;
+    }
+    button:hover {
+      opacity: 0.9;
+    }
+    button:disabled {
+      background-color: #CCCCCC;
+      cursor: not-allowed;
+    }
+    .button-group {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 12px;
+    }
+    .progress {
+      width: 100%;
+      height: 4px;
+      background-color: #E0E0E0;
+      border-radius: 4px;
+      margin: 8px 0;
+    }
+    .progress-bar {
+      height: 100%;
+      background-color: #18A0FB;
+      border-radius: 4px;
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+    .result-preview {
+      background-color: white;
+      border: 1px solid #E0E0E0;
+      border-radius: 4px;
+      padding: 12px;
+      margin-top: 8px;
+      max-height: 200px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 12px;
+    }
+    .code-preview {
+      background-color: #f9f9f9;
+      border-left: 3px solid #18A0FB;
+      padding: 8px;
+      margin: 8px 0;
+      font-family: monospace;
+      font-size: 11px;
+      max-height: 100px;
+      overflow-y: auto;
+    }
+    .thumbnails {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .thumbnail {
+      width: 80px;
+      height: 80px;
+      object-fit: cover;
+      border-radius: 4px;
+      border: 1px solid #E0E0E0;
+    }
+    .status {
+      font-size: 12px;
+      color: #666;
+      margin: 8px 0;
+      font-style: italic;
+    }
+    .error {
+      color: #e53935;
+      font-size: 12px;
+    }
+    .success {
+      color: #43a047;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Figma to Claude</h1>
+    
+    <div class="section">
+      <h2>1. Extract Screens</h2>
+      <p>Select frames in Figma and extract them for Claude. <span id="devmode-status"></span></p>
+      <button id="extract-screens">Extract Selected Frames</button>
+      <div class="status" id="screens-status"></div>
+      <div class="thumbnails" id="screen-thumbnails"></div>
+    </div>
+    
+    <div class="section">
+      <h2>2. Extract Design System</h2>
+      <p>Extract colors, typography, and spacing from your design.</p>
+      <button id="extract-styles">Extract Design Styles</button>
+      <div class="status" id="styles-status"></div>
+      <div id="styles-preview"></div>
+    </div>
+    
+    <div class="section">
+      <h2>3. Generate Documentation</h2>
+      <p>Create documentation from extracted design data.</p>
+      <button id="generate-docs">Generate Documentation</button>
+      <div class="status" id="docs-status"></div>
+      <div class="result-preview" id="docs-preview"></div>
+    </div>
+    
+    <div class="section">
+      <h2>4. Export for Claude</h2>
+      <p>Export all data in a format optimized for Claude.</p>
+      <button id="export-claude">Export for Claude</button>
+      <div class="status" id="export-status"></div>
+    </div>
+    
+    <div class="button-group">
+      <button class="secondary" id="cancel">Cancel</button>
+      <button id="download-all" disabled>Download All</button>
+    </div>
+  </div>
+  
+  <script>
+    // Variables para almacenar datos
+    let extractedScreens = [];
+    let extractedStyles = {};
+    let generatedMarkdown = "";
+
+    // Referencias DOM
+    const extractScreensBtn = document.getElementById('extract-screens');
+    const extractStylesBtn = document.getElementById('extract-styles');
+    const generateDocsBtn = document.getElementById('generate-docs');
+    const exportClaudeBtn = document.getElementById('export-claude');
+    const cancelBtn = document.getElementById('cancel');
+    const downloadAllBtn = document.getElementById('download-all');
+    
+    const screensStatus = document.getElementById('screens-status');
+    const screenThumbnails = document.getElementById('screen-thumbnails');
+    const stylesStatus = document.getElementById('styles-status');
+    const stylesPreview = document.getElementById('styles-preview');
+    const docsStatus = document.getElementById('docs-status');
+    const docsPreview = document.getElementById('docs-preview');
+    const exportStatus = document.getElementById('export-status');
+
+    // Event Listeners
+    extractScreensBtn.onclick = () => {
+      screensStatus.textContent = 'Extracting frames...';
+      screenThumbnails.innerHTML = '';
+      parent.postMessage({ pluginMessage: { type: 'extract-selected' } }, '*');
+    };
+    
+    extractStylesBtn.onclick = () => {
+      stylesStatus.textContent = 'Extracting styles...';
+      stylesPreview.innerHTML = '';
+      parent.postMessage({ pluginMessage: { type: 'extract-styles' } }, '*');
+    };
+    
+    generateDocsBtn.onclick = () => {
+      docsStatus.textContent = 'Generating documentation...';
+      parent.postMessage({ pluginMessage: { type: 'generate-documentation' } }, '*');
+    };
+    
+    exportClaudeBtn.onclick = () => {
+      exportStatus.textContent = 'Preparing export for Claude...';
+      parent.postMessage({ pluginMessage: { type: 'export-claude' } }, '*');
+    };
+    
+    cancelBtn.onclick = () => {
+      parent.postMessage({ pluginMessage: { type: 'cancel' } }, '*');
+    };
+    
+    downloadAllBtn.onclick = downloadAllData;
+
+    // Manejo de mensajes desde el plugin
+    window.onmessage = (event) => {
+      const msg = event.data.pluginMessage;
+      if (!msg) return;
+      
+      switch (msg.type) {
+        case 'extraction-started':
+          screensStatus.textContent = 'Extraction in progress...';
+          screensStatus.className = 'status';
+          break;
+          
+        case 'extraction-completed':
+          extractedScreens = msg.data;
+          screensStatus.textContent = `Extracted ${extractedScreens.length} frames!`;
+          screensStatus.className = 'status success';
+          
+          // Verificar si hay datos de DevMode disponibles
+          const hasDevModeData = extractedScreens.some(screen => screen.cssCode || screen.reactCode || screen.tailwindCode);
+          
+          // Actualizar el estado de DevMode en la UI
+          const devModeStatus = document.getElementById('devmode-status');
+          if (devModeStatus) {
+            if (hasDevModeData) {
+              devModeStatus.textContent = '(DevMode data available)';
+              devModeStatus.style.color = '#43a047';
+              devModeStatus.style.fontWeight = 'bold';
+            } else {
+              devModeStatus.textContent = '';
+            }
+          }
+          
+          // Mostrar miniaturas
+          screenThumbnails.innerHTML = '';
+          extractedScreens.forEach(screen => {
+            const container = document.createElement('div');
+            container.style.position = 'relative';
+            container.style.display = 'inline-block';
+            
+            const img = document.createElement('img');
+            img.src = `data:image/png;base64,${screen.image}`;
+            img.alt = screen.name;
+            img.title = screen.name;
+            img.className = 'thumbnail';
+            
+            container.appendChild(img);
+            
+            // Añadir indicador si hay código disponible
+            if (screen.cssCode || screen.reactCode || screen.tailwindCode) {
+              const codeIndicator = document.createElement('div');
+              codeIndicator.style.position = 'absolute';
+              codeIndicator.style.top = '2px';
+              codeIndicator.style.right = '2px';
+              codeIndicator.style.backgroundColor = '#43a047';
+              codeIndicator.style.borderRadius = '50%';
+              codeIndicator.style.width = '12px';
+              codeIndicator.style.height = '12px';
+              codeIndicator.title = 'Code available from DevMode';
+              
+              container.appendChild(codeIndicator);
+            }
+            
+            screenThumbnails.appendChild(container);
+          });
+          break;
+          
+        case 'styles-extraction-started':
+          stylesStatus.textContent = 'Extracting design styles...';
+          stylesStatus.className = 'status';
+          break;
+          
+        case 'styles-extraction-completed':
+          extractedStyles = msg.data;
+          stylesStatus.textContent = `Extracted ${extractedStyles.colors.length} colors, ${extractedStyles.typography.length} text styles, and ${extractedStyles.spacing.length} spacing values!`;
+          stylesStatus.className = 'status success';
+          
+          // Mostrar resumen de estilos
+          let stylesHTML = '<div style="font-size: 12px;">';
+          
+          // Mostrar colores
+          if (extractedStyles.colors.length > 0) {
+            stylesHTML += '<div style="margin-bottom: 8px;"><strong>Colors:</strong> ';
+            extractedStyles.colors.forEach(color => {
+              stylesHTML += `<span style="display: inline-block; width: 16px; height: 16px; background-color: ${color.hex}; margin-right: 4px; border-radius: 2px; border: 1px solid #ddd;" title="${color.name}: ${color.hex}"></span>`;
+            });
+            stylesHTML += '</div>';
+          }
+          
+          // Mostrar fuentes
+          if (extractedStyles.typography.length > 0) {
+            stylesHTML += '<div><strong>Typography:</strong> ';
+            extractedStyles.typography.slice(0, 3).forEach(font => {
+              stylesHTML += `<span style="margin-right: 8px;">${font.fontFamily} ${font.fontSize}px</span>`;
+            });
+            if (extractedStyles.typography.length > 3) {
+              stylesHTML += `<span>+${extractedStyles.typography.length - 3} more</span>`;
+            }
+            stylesHTML += '</div>';
+          }
+          
+          stylesHTML += '</div>';
+          stylesPreview.innerHTML = stylesHTML;
+          break;
+          
+        case 'documentation-generated':
+          generatedMarkdown = msg.markdown;
+          docsStatus.textContent = 'Documentation generated successfully!';
+          docsStatus.className = 'status success';
+          // Renderizar vista previa de manera más enriquecida
+          let previewContent = generatedMarkdown.slice(0, 800);
+          if (generatedMarkdown.length > 800) previewContent += '...';
+          
+          // Sustituir bloques de código con formato
+          previewContent = previewContent.replace(/```(\w+)?\n([\s\S]*?)```/g, 
+            (match, lang, code) => `<div class="code-preview">${lang ? `<strong>${lang}</strong><br>` : ''}${code}</div>`);
+            
+          docsPreview.innerHTML = previewContent;
+          break;
+          
+        case 'claude-export-ready':
+          exportStatus.textContent = 'Export ready! Click "Download All" to save.';
+          exportStatus.className = 'status success';
+          downloadAllBtn.disabled = false;
+          
+          // Guardar datos para descarga
+          window.claudeExportData = msg.data;
+          break;
+          
+        case 'error':
+          const statusEl = msg.context === 'screens' ? screensStatus : 
+                          msg.context === 'styles' ? stylesStatus :
+                          msg.context === 'docs' ? docsStatus : exportStatus;
+          
+          statusEl.textContent = msg.message;
+          statusEl.className = 'status error';
+          break;
+      }
+    };
+
+    // Función para descargar todos los datos
+    function downloadAllData() {
+      if (!window.claudeExportData) {
+        alert('No data available to download. Please complete all extraction steps first.');
+        return;
+      }
+      
+      // Crear un objeto con todos los datos
+      const exportBundle = {
+        metadata: window.claudeExportData.designMetadata,
+        screens: extractedScreens,
+        styles: extractedStyles,
+        documentation: generatedMarkdown,
+        claudePrompt: window.claudeExportData.promptInstructions
+      };
+      
+      // Convertir a JSON
+      const jsonData = JSON.stringify(exportBundle, null, 2);
+      
+      // Crear blob y descargar
+      const blob = new Blob([jsonData], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'figma-to-claude-export.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      exportStatus.textContent = 'Export downloaded successfully!';
+    }
+  </script>
+</body>
+</html>
